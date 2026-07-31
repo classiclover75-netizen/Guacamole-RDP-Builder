@@ -1,0 +1,6 @@
+{
+  "name": "Guacamole RDP Builder",
+  "description": "RDP Connection Builder for Apache Guacamole configuration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
