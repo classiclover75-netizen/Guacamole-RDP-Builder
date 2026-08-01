@@ -68,6 +68,17 @@ export default function App() {
     showToast("Downloaded");
   };
 
+  const handleClearAll = () => {
+    if (connections.length === 0) {
+      showToast("List is already empty", true);
+      return;
+    }
+    if (window.confirm("Are you sure? All added connections will be cleared.")) {
+      setConnections([]);
+      showToast("All connections cleared");
+    }
+  };
+
   return (
     <div className="h-screen w-full bg-guac-bg text-guac-ink font-sans flex flex-col overflow-hidden">
       <header className="px-8 py-6 border-b border-guac-line flex justify-between items-end bg-guac-bg shrink-0">
@@ -103,6 +114,7 @@ export default function App() {
             connections={connections}
             onCopy={handleCopyJson}
             onDownload={handleDownloadJson}
+            onClearAll={handleClearAll}
           />
           <LockedSettings />
         </section>
