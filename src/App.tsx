@@ -7,12 +7,14 @@ import { LockedSettings } from "@/components/LockedSettings";
 import { JsonOutput } from "@/components/JsonOutput";
 import { ConnectionList } from "@/components/ConnectionList";
 import { Toast } from "@/components/Toast";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 const STORE_KEY = "guac_rdp_remember_v2";
 
 export default function App() {
   const [connections, setConnections] = useState<GuacConnection[]>([]);
   const [remembered, setRemembered] = useLocalStorage<RememberedFields>(STORE_KEY, {});
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const { toast, showToast } = useToast();
 
   const handleToggleRemember = (key: keyof RememberedFields, value: string) => {
@@ -73,10 +75,17 @@ export default function App() {
       showToast("List is already empty", true);
       return;
     }
-    if (window.confirm("Are you sure? All added connections will be cleared.")) {
-      setConnections([]);
-      showToast("All connections cleared");
-    }
+    setIsConfirmOpen(true);
+  };
+
+  const confirmClearAll = () => {
+    setConnections([]);
+    setIsConfirmOpen(false);
+    showToast("All connections cleared");
+  };
+
+  const cancelClearAll = () => {
+    setIsConfirmOpen(false);
   };
 
   return (
@@ -131,6 +140,13 @@ export default function App() {
       </footer>
 
       <Toast message={toast.message} isError={toast.isError} visible={toast.visible} />
+      
+      <ConfirmModal 
+        isOpen={isConfirmOpen}
+        message="Are you sure? All added connections will be cleared."
+        onConfirm={confirmClearAll}
+        onCancel={cancelClearAll}
+      />
     </div>
   );
 }
