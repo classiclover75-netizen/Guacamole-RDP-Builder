@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GuacConnection, RememberedFields } from "@/types";
+import { GuacConnection, RememberedFields, ConnectionState } from "@/types";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useToast } from "@/hooks/useToast";
 import { ConnectionForm } from "@/components/ConnectionForm";
@@ -12,7 +12,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 const STORE_KEY = "guac_rdp_remember_v2";
 
 export default function App() {
-  const [connections, setConnections] = useState<GuacConnection[]>([]);
+  const [connections, setConnections] = useState<ConnectionState[]>([]);
   const [remembered, setRemembered] = useLocalStorage<RememberedFields>(STORE_KEY, {});
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const { toast, showToast } = useToast();
@@ -30,35 +30,56 @@ export default function App() {
   };
 
   const handleAddConnection = (conn: GuacConnection) => {
-    if (connections.some((c) => c.name.toLowerCase() === conn.name.toLowerCase())) {
+    if (connections.some((c) => c.data.name.toLowerCase() === conn.name.toLowerCase())) {
       showToast("Ye name pehle se hai", true);
       return;
     }
-    setConnections((prev) => [...prev, conn]);
+    const newState: ConnectionState = {
+      id: crypto.randomUUID(),
+      selected: true,
+      data: conn,
+    };
+    setConnections((prev) => [...prev, newState]);
     showToast(`Added: ${conn.name}`);
   };
 
-  const handleRemoveConnection = (index: number) => {
-    setConnections((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveConnection = (id: string) => {
+    setConnections((prev) => prev.filter((c) => c.id !== id));
   };
 
+  const handleToggleSelect = (id: string) => {
+    setConnections((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, selected: !c.selected } : c))
+    );
+  };
+
+  const handleSelectAll = () => {
+    setConnections((prev) => prev.map((c) => ({ ...c, selected: true })));
+  };
+
+  const handleSelectNone = () => {
+    setConnections((prev) => prev.map((c) => ({ ...c, selected: false })));
+  };
+
+  const selectedConnections = connections.filter((c) => c.selected).map((c) => c.data);
+
   const handleCopyJson = () => {
-    if (connections.length === 0) {
-      showToast("Pehle connection add karein", true);
+    if (selectedConnections.length === 0) {
+      showToast("No connection selected", true);
       return;
     }
     navigator.clipboard
-      .writeText(JSON.stringify(connections, null, 2))
+      .writeText(JSON.stringify(selectedConnections, null, 2))
       .then(() => showToast("Copied!"))
       .catch(() => showToast("Copy fail", true));
   };
 
   const handleDownloadJson = () => {
-    if (connections.length === 0) {
-      showToast("Pehle connection add karein", true);
+    if (selectedConnections.length === 0) {
+      showToast("No connection selected", true);
       return;
     }
-    const blob = new Blob([JSON.stringify(connections, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(selectedConnections, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -68,6 +89,21 @@ export default function App() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     showToast("Downloaded");
+  };
+
+  const handleDownloadSingle = (id: string) => {
+    const connState = connections.find((c) => c.id === id);
+    if (!connState) return;
+    const blob = new Blob([JSON.stringify([connState.data], null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `guacamole-${connState.data.name}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Downloaded ${connState.data.name}`);
   };
 
   const handleClearAll = () => {
@@ -115,15 +151,19 @@ export default function App() {
           <ConnectionList
             connections={connections}
             onRemove={handleRemoveConnection}
+            onToggleSelect={handleToggleSelect}
+            onSelectAll={handleSelectAll}
+            onSelectNone={handleSelectNone}
+            onClearAll={handleClearAll}
+            onDownloadSingle={handleDownloadSingle}
           />
         </section>
 
         <section className="md:col-span-7 flex flex-col gap-6 min-h-0 shrink-0">
           <JsonOutput
-            connections={connections}
+            connections={selectedConnections}
             onCopy={handleCopyJson}
             onDownload={handleDownloadJson}
-            onClearAll={handleClearAll}
           />
           <LockedSettings />
         </section>

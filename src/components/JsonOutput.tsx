@@ -4,10 +4,9 @@ interface Props {
   connections: GuacConnection[];
   onCopy: () => void;
   onDownload: () => void;
-  onClearAll: () => void;
 }
 
-export function JsonOutput({ connections, onCopy, onDownload, onClearAll }: Props) {
+export function JsonOutput({ connections, onCopy, onDownload }: Props) {
   return (
     <div className="bg-guac-panel border border-guac-line rounded-xl flex flex-col md:h-[480px] h-[300px] overflow-hidden shadow-2xl shrink-0">
       <div className="flex justify-between items-center px-5 py-3 border-b border-guac-line bg-guac-panel-header shrink-0">
@@ -26,12 +25,6 @@ export function JsonOutput({ connections, onCopy, onDownload, onClearAll }: Prop
             className="border-none bg-guac-line text-[10px] font-bold text-white px-3 py-1 rounded uppercase hover:brightness-110 cursor-pointer transition-all"
           >
             Download
-          </button>
-          <button
-            onClick={onClearAll}
-            className="border-none bg-guac-danger text-[10px] font-bold text-white px-3 py-1 rounded uppercase hover:brightness-110 cursor-pointer transition-all"
-          >
-            Clear All
           </button>
         </div>
       </div>

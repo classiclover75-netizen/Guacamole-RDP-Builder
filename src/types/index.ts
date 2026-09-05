@@ -26,6 +26,12 @@ export interface GuacConnection {
   };
 }
 
+export interface ConnectionState {
+  id: string;
+  selected: boolean;
+  data: GuacConnection;
+}
+
 export type RememberedFields = {
   name?: string;
   host?: string;
