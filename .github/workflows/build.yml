@@ -1,86 +1,77 @@
-name: Build Windows Application
+name: Build Windows App
 
+# Jab bhi main branch par push ho, yeh workflow automatically chalega
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
-  workflow_dispatch:
-
-permissions:
-  contents: write
+    branches:
+      - main
+  workflow_dispatch: # Manually bhi "Run workflow" button se trigger kar sakte hain
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
+
     steps:
-      - name: Checkout repository
+      # 1. Repo ka code checkout karein
+      - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2. Node.js setup karein
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: 'npm'
+          node-version: 20
 
-      - name: Install frontend dependencies
-        run: npm ci
-
+      # 3. Rust setup karein (Tauri ko chahiye)
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
 
-      - name: Cache Rust dependencies
+      # 4. Rust build cache (taake future builds fast hon)
+      - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: 'src-tauri -> target'
+          workspaces: "./src-tauri -> target"
 
-      - name: Type check & lint
-        run: npm run lint
-
-      - name: Build Tauri application
-        run: npm run tauri build -- --target x86_64-pc-windows-msvc
-
-      - name: Collect build artifacts
-        shell: bash
+      # 5. npm dependencies install karein
+      # (package-lock.json aur node_modules hata kar fresh install — rollup ke
+      #  platform-specific optional-dependency bug se bachne ke liye)
+      - name: Install dependencies
+        shell: pwsh
         run: |
-          mkdir -p output
+          if (Test-Path package-lock.json) { Remove-Item package-lock.json }
+          if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules }
+          npm install
 
-          SETUP_SRC=$(find src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis -name "*.exe" | head -n 1)
-          PORTABLE_SRC="src-tauri/target/x86_64-pc-windows-msvc/release/guacamole-rdp-builder.exe"
-
-          if [ -z "$SETUP_SRC" ] || [ ! -f "$SETUP_SRC" ]; then
-            echo "::error::NSIS setup .exe not found under src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis"
-            exit 1
-          fi
-
-          if [ ! -f "$PORTABLE_SRC" ]; then
-            echo "::error::Portable .exe not found at $PORTABLE_SRC"
-            exit 1
-          fi
-
-          cp "$SETUP_SRC" "output/Guacamole-RDP-Builder-Setup.exe"
-          cp "$PORTABLE_SRC" "output/Guacamole-RDP-Builder-Portable.exe"
-
-          echo "Build artifacts ready:"
-          ls -la output/
-
-      - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: output/*.exe
-          if-no-files-found: error
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: false
-          name: "Guacamole RDP Builder ${{ github.ref_name }}"
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: output/*.exe
+      # 6. Tauri app build karein aur GitHub Release par upload karein
+      - name: Build Tauri app
+        id: tauri_build
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Agar Gemini API key build ke waqt chahiye ho to yahan secret add karein:
+          # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: "App v__VERSION__"
+          releaseBody: "Naya build automatically GitHub Actions se banaya gaya."
+          releaseDraft: true
+          prerelease: false
+
+      # 7. App ka version nikalein (release tag banane ke liye zaroori hai)
+      - name: Get app version
+        id: appversion
+        shell: pwsh
+        run: |
+          $json = Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json
+          "version=$($json.version)" >> $env:GITHUB_OUTPUT
+
+      # 8. Raw (no-install) portable exe ko naya naam de kar copy karein
+      - name: Prepare portable exe
+        shell: pwsh
+        run: Copy-Item "src-tauri/target/release/guacamole-rdp-builder.exe" "src-tauri/target/release/Guacamole-RDP-Builder-Portable.exe"
+
+      # 9. Portable exe ko usi Release mein extra asset ke tor par upload karein
+      - name: Upload portable exe to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload app-v${{ steps.appversion.outputs.version }} "src-tauri/target/release/Guacamole-RDP-Builder-Portable.exe" --repo ${{ github.repository }} --clobber
