@@ -2,10 +2,7 @@ name: Build Windows Application
 
 on:
   push:
-    branches: [ "main", "master" ]
-    tags: [ "v*" ]
-  pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -37,11 +34,16 @@ jobs:
       - name: Type Check & Lint
         run: npm run lint
 
-      - name: Build Frontend
-        run: npm run build
-
-      - name: Build Tauri Application
-        run: npm run tauri build -- --target x86_64-pc-windows-msvc
+      - name: Build Tauri Application & Create Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: "Guacamole RDP Builder v__VERSION__"
+          releaseBody: "Automated draft release for v__VERSION__"
+          releaseDraft: true
+          args: --target x86_64-pc-windows-msvc
 
       - name: Rename Build Artifacts
         run: |
@@ -55,21 +57,3 @@ jobs:
         with:
           name: windows-build
           path: output/*.exe
-          
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-build
-          path: output
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: output/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
