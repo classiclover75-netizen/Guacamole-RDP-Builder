@@ -3,7 +3,11 @@ name: Build Windows Application
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -34,22 +38,27 @@ jobs:
       - name: Type Check & Lint
         run: npm run lint
 
-      - name: Build Tauri Application & Create Release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: app-v__VERSION__
-          releaseName: "Guacamole RDP Builder v__VERSION__"
-          releaseBody: "Automated draft release for v__VERSION__"
-          releaseDraft: true
-          args: --target x86_64-pc-windows-msvc
+      - name: Build Tauri Application
+        run: npm run tauri build -- --target x86_64-pc-windows-msvc
 
-      - name: Rename Build Artifacts
+      - name: Rename and Verify Build Artifacts
         run: |
           mkdir output
           cp src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe output/Guacamole-RDP-Builder-Setup.exe
           cp src-tauri/target/x86_64-pc-windows-msvc/release/guacamole-rdp-builder.exe output/Guacamole-RDP-Builder-Portable.exe
+          
+          echo "Verifying generated files:"
+          ls -la output/
+          
+          if [ ! -f "output/Guacamole-RDP-Builder-Setup.exe" ]; then
+            echo "Error: Setup.exe not found!"
+            exit 1
+          fi
+          
+          if [ ! -f "output/Guacamole-RDP-Builder-Portable.exe" ]; then
+            echo "Error: Portable.exe not found!"
+            exit 1
+          fi
         shell: bash
 
       - name: Upload Artifacts
@@ -57,3 +66,13 @@ jobs:
         with:
           name: windows-build
           path: output/*.exe
+
+      - name: Create Draft Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: "Guacamole RDP Builder ${{ github.ref_name }}"
+          files: output/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
