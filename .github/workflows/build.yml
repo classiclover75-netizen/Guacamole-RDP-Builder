@@ -22,7 +22,7 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Install Frontend Dependencies
+      - name: Install frontend dependencies
         run: npm ci
 
       - name: Setup Rust
@@ -35,44 +35,52 @@ jobs:
         with:
           workspaces: 'src-tauri -> target'
 
-      - name: Type Check & Lint
+      - name: Type check & lint
         run: npm run lint
 
-      - name: Build Tauri Application
+      - name: Build Tauri application
         run: npm run tauri build -- --target x86_64-pc-windows-msvc
 
-      - name: Rename and Verify Build Artifacts
-        run: |
-          mkdir output
-          cp src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe output/Guacamole-RDP-Builder-Setup.exe
-          cp src-tauri/target/x86_64-pc-windows-msvc/release/guacamole-rdp-builder.exe output/Guacamole-RDP-Builder-Portable.exe
-          
-          echo "Verifying generated files:"
-          ls -la output/
-          
-          if [ ! -f "output/Guacamole-RDP-Builder-Setup.exe" ]; then
-            echo "Error: Setup.exe not found!"
-            exit 1
-          fi
-          
-          if [ ! -f "output/Guacamole-RDP-Builder-Portable.exe" ]; then
-            echo "Error: Portable.exe not found!"
-            exit 1
-          fi
+      - name: Collect build artifacts
         shell: bash
+        run: |
+          mkdir -p output
 
-      - name: Upload Artifacts
+          SETUP_SRC=$(find src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis -name "*.exe" | head -n 1)
+          PORTABLE_SRC="src-tauri/target/x86_64-pc-windows-msvc/release/guacamole-rdp-builder.exe"
+
+          if [ -z "$SETUP_SRC" ] || [ ! -f "$SETUP_SRC" ]; then
+            echo "::error::NSIS setup .exe not found under src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis"
+            exit 1
+          fi
+
+          if [ ! -f "$PORTABLE_SRC" ]; then
+            echo "::error::Portable .exe not found at $PORTABLE_SRC"
+            exit 1
+          fi
+
+          cp "$SETUP_SRC" "output/Guacamole-RDP-Builder-Setup.exe"
+          cp "$PORTABLE_SRC" "output/Guacamole-RDP-Builder-Portable.exe"
+
+          echo "Build artifacts ready:"
+          ls -la output/
+
+      - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: output/*.exe
+          if-no-files-found: error
 
-      - name: Create Draft Release
+      - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: false
+          prerelease: false
           name: "Guacamole RDP Builder ${{ github.ref_name }}"
+          generate_release_notes: true
+          fail_on_unmatched_files: true
           files: output/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
